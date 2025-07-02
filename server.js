@@ -18,11 +18,23 @@ connectDB();
 const app = express();
 
 
+// app.use(cors({
+//     origin: ["http://localhost:3000"], // allow frontend
+//     credentials: true // optional, only if you're using cookies/auth
+//   })); 
 app.use(cors({
-    origin: ["http://localhost:8000"], // allow frontend
-    credentials: true // optional, only if you're using cookies/auth
-  })); 
-app.options('*', cors());
+    origin: ["http://localhost:3000","https://ecommerce-watches-eight.vercel.app/api/v1"], // frontend origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  }));
+//app.options('*', cors());
+app.options('*', cors({
+    origin: ["http://localhost:3000","https://ecommerce-watches-eight.vercel.app/api/v1"], // frontend origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  }));
 app.use(compression());
 app.use(express.json({ limit: '20kb' }));
 
