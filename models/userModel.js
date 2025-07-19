@@ -5,13 +5,18 @@ const userSchema = new mongoose.Schema(
     {
         name: {
             type: String,
-            unique: [true, "Name already exists."],
             required: [true, "Name is required."],
             trim: true,
         },
         slug: {
             type: String,
             lowercase: true
+        },
+        phone: {
+            type: String,
+            required: [true, "Phone number is required."],
+            unique: [true, "Phone number already exists."],
+            trim: true,
         },
         email: {
             type: String,

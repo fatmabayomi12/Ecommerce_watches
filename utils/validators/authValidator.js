@@ -8,12 +8,12 @@ export const signupValidator = [
     .notEmpty()
     .withMessage('User required')
     .isLength({ min: 3 })
-    .withMessage('Too short User name')
-    .custom((val, { req }) => {
-      req.body.slug = slugify(val);
-      return true;
-    }),
-
+    .withMessage('Too short User name'),
+  check('phone')
+    .notEmpty()
+    .withMessage('Phone number required')
+    .isMobilePhone('ar-EG')
+    .withMessage('Invalid phone number'),
   check('email')
     .notEmpty()
     .withMessage('Email required')

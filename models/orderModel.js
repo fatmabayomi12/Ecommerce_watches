@@ -34,19 +34,19 @@ const orderSchema = new mongoose.Schema({
         address: String,
         phone: String,
         city: String,
-        zipCode: String
+        zipCode: String,
+        paymentMethodType: {
+            type: String,
+            enum: ['InstaPay', 'cash'],
+            default: 'cash'
+        }
     },
-    shippingPrice: {
-        type: Number,
-        default: 0,
-    },
+    // shippingPrice: {
+    //     type: Number,
+    //     default: 0,
+    // },
     totalOrderPrice: { type: Number },
     totalPriceAfterDiscount: { type: Number },
-    paymentMethodType: {
-        type: String,
-        enum: ['card', 'cash'],
-        default: 'cash'
-    },
     isPaid: {
         type: Boolean,
         default: false

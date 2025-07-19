@@ -12,6 +12,7 @@ import Order from '../models/orderModel.js';
 // @access  Protected/User
 export const createDirectOrder = asyncHandler(async (req, res, next) => {
     const { cartItems, shippingAddress } = req.body;
+
     if (!cartItems || cartItems.length === 0) {
         return next(new ApiError('No products provided', 400));
     }
@@ -50,25 +51,11 @@ export const createDirectOrder = asyncHandler(async (req, res, next) => {
         });
     }
 
-    let shippingPrice = 0;
-    try {
-        const shPrice = await globalShippingPrice.findOne();
-        if (shPrice && shPrice.shippingPrice) {
-            shippingPrice = shPrice.shippingPrice;
-        }
-    } catch (error) {
-        return next(new ApiError('Error fetching shipping price', 500));
-    }
-
-    totalOrderPrice += shippingPrice;
-
     const newOrder = await Order.create({
         user: req.user._id,
         cartItems: updatedCartItems,
         shippingAddress,
         totalOrderPrice,
-        shippingPrice,
-        paymentMethodType: 'cash',
         isPaid: false
     });
 
@@ -93,6 +80,88 @@ export const createDirectOrder = asyncHandler(async (req, res, next) => {
         data: sanitizeOrder(newOrder)
     });
 });
+
+// export const createDirectOrder = asyncHandler(async (req, res, next) => {
+//     const { cartItems, shippingAddress } = req.body;
+//     if (!cartItems || cartItems.length === 0) {
+//         return next(new ApiError('No products provided', 400));
+//     }
+
+//     const productIds = cartItems.map((item) => item.product);
+//     const products = await Product.find({ _id: { $in: productIds } });
+
+//     if (products.length !== cartItems.length) {
+//         return next(new ApiError('Some products do not exist', 400));
+//     }
+
+//     let totalOrderPrice = 0;
+//     let updatedCartItems = [];
+
+//     for (const item of cartItems) {
+//         const product = products.find((p) => String(p._id) === String(item.product));
+//         if (!product) {
+//             return next(new ApiError(`Product not found: ${item.product}`, 404));
+//         }
+//         if (product.quantity < item.quantity) {
+//             return next(
+//                 new ApiError(
+//                     `Insufficient stock for "${product.title}". Available: ${product.quantity}, Requested: ${item.quantity}`,
+//                     400
+//                 )
+//             );
+//         }
+
+//         totalOrderPrice += product.price * item.quantity;
+
+//         updatedCartItems.push({
+//             product: item.product,
+//             quantity: item.quantity,
+//             color: item.color,
+//             price: product.price
+//         });
+//     }
+
+//     // let shippingPrice = 0;
+//     // try {
+//     //     const shPrice = await globalShippingPrice.findOne();
+//     //     if (shPrice && shPrice.shippingPrice) {
+//     //         shippingPrice = shPrice.shippingPrice;
+//     //     }
+//     // } catch (error) {
+//     //     return next(new ApiError('Error fetching shipping price', 500));
+//     // }
+
+//     // totalOrderPrice += shippingPrice;
+
+//     const newOrder = await Order.create({
+//         user: req.user._id,
+//         cartItems: updatedCartItems,
+//         shippingAddress,
+//         totalOrderPrice,
+//         isPaid: false
+//     });
+
+//     const bulkOption = cartItems.map((item) => ({
+//         updateOne: {
+//             filter: { _id: item.product },
+//             update: { $inc: { quantity: -item.quantity, sold: +item.quantity } }
+//         }
+//     }));
+
+//     if (bulkOption.length > 0) {
+//         await Product.bulkWrite(bulkOption, {});
+//     }
+
+//     await newOrder.populate({
+//         path: 'user',
+//         select: '_id name email'
+//     });
+
+//     res.status(201).json({
+//         status: 'success',
+//         data: sanitizeOrder(newOrder)
+//     });
+// });
 
 
 const calculateTotalOrderPrice = (cart) => {
