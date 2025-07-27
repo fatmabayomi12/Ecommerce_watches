@@ -261,7 +261,7 @@ export const deleteOrder = asyncHandler(async (req, res, next) => {
 
     if (req.user.role === 'admin') {
         await Order.findByIdAndDelete(orderId);
-        return res.status(200);
+        return res.status(200).json([]);
     }
 
     const orderTime = new Date(order.createdAt);
@@ -276,7 +276,7 @@ export const deleteOrder = asyncHandler(async (req, res, next) => {
     }
 
     await Order.findByIdAndDelete(orderId);
-    return res.status(200);
+    return res.status(200).json([]);
 
 });
 
