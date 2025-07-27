@@ -234,7 +234,7 @@ export const getAllOrders = asyncHandler(async (req, res, next) => {
 
 export const getAllUserOrders = asyncHandler(async (req, res, next) => {
     const decumentsCounts = await Order.countDocuments();
-    const apiFeatures = new ApiFeatures(Order.find({ user: req.user._id }).populate('user', 'name email -_id').select('-_id -__v'), req.query).paginate(decumentsCounts);
+    const apiFeatures = new ApiFeatures(Order.find({ user: req.user._id }).populate('user', 'name email -_id').select('-__v'), req.query).paginate(decumentsCounts);
     const { mongooseQuery, paginationResult } = apiFeatures;
     const orders = await mongooseQuery;
 

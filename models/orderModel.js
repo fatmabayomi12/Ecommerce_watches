@@ -34,7 +34,7 @@ const orderSchema = new mongoose.Schema({
         address: String,
         phone: String,
         city: String,
-        zipCode: String,
+        //zipCode: String,
         paymentMethodType: {
             type: String,
             enum: ['InstaPay', 'cash'],
