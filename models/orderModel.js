@@ -39,6 +39,9 @@ const orderSchema = new mongoose.Schema({
             type: String,
             enum: ['InstaPay', 'cash'],
             default: 'cash'
+        },
+        image:{
+            type: String, 
         }
     },
     // shippingPrice: {

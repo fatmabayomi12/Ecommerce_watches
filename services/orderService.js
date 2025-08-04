@@ -1,4 +1,6 @@
 import asyncHandler from 'express-async-handler';
+import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';
 import ApiError from '../utils/apiError.js';
 import ApiFeatures from '../utils/apiFeatures.js';
 import { sanitizeOrder } from '../utils/sanitizeData.js';
@@ -6,205 +8,120 @@ import Cart from '../models/cartModel.js';
 import Product from '../models/productModel.js';
 import globalShippingPrice from '../models/shippingPriceModel.js';
 import Order from '../models/orderModel.js';
+import cloudinary from '../utils/cloudinary.js';
 
+
+export const uploadToCloudinary = (buffer, filename, folder) => {
+    return new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+            {
+                folder, // Folder in Cloudinary
+                public_id: filename, // File name in Cloudinary
+                resource_type: 'image', // Force image type
+                format: 'jpeg',
+                quality: 'auto', // Optimize quality dynamically
+            },
+            (error, result) => (error ? reject(error) : resolve(result))
+        ).end(buffer);
+    });
+};
+
+
+export const resizeInstaPayImage = async (req, res, next) => {
+    try {
+      if (!req.file) return next();
+  
+      const filename = `product-${uuidv4()}`;
+  
+      const buffer = await sharp(req.file.buffer)
+        .resize(800, 800, {
+          fit: sharp.fit.cover,
+          position: sharp.strategy.center,
+        })
+        .toFormat('jpeg')
+        .jpeg({ quality: 90 })
+        .toBuffer();
+  
+      const result = await uploadToCloudinary(buffer, filename, 'products');
+  
+      if (!req.body.shippingAddress) {
+        req.body.shippingAddress = {};
+      }
+  
+      req.body.shippingAddress.image = result.secure_url;
+  
+      next();
+    } catch (error) {
+      console.error(error);
+      next(new ApiError('Failed to process InstaPay image', 500));
+    }
+  };
+  
 // @desc    Create direct order
 // @route   POST /api/v1/orders/direct-order
 // @access  Protected/User
 export const createDirectOrder = asyncHandler(async (req, res, next) => {
-    const { cartItems, shippingAddress } = req.body;
+    const shippingPriceData = await globalShippingPrice.findOne();
+    const shippingPrice = shippingPriceData ? shippingPriceData.shippingPrice : 0;
 
-    if (!cartItems || cartItems.length === 0) {
-        return next(new ApiError('No products provided', 400));
-    }
+    const { cartItems, shippingAddress, paymentMethodType } = req.body;
 
-    const productIds = cartItems.map((item) => item.product);
-    const products = await Product.find({ _id: { $in: productIds } });
-
-    if (products.length !== cartItems.length) {
-        return next(new ApiError('Some products do not exist', 400));
+    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
+        return next(new ApiError('Cart items are required', 400));
     }
 
     let totalOrderPrice = 0;
-    let updatedCartItems = [];
-
     for (const item of cartItems) {
-        const product = products.find((p) => String(p._id) === String(item.product));
+        const product = await Product.findById(item.product);
         if (!product) {
             return next(new ApiError(`Product not found: ${item.product}`, 404));
         }
-        if (product.quantity < item.quantity) {
-            return next(
-                new ApiError(
-                    `Insufficient stock for "${product.title}". Available: ${product.quantity}, Requested: ${item.quantity}`,
-                    400
-                )
-            );
+
+        if (item.quantity > product.quantity) {
+            return next(new ApiError(`Not enough quantity for product: ${product.name}`, 400));
         }
 
         totalOrderPrice += product.price * item.quantity;
-
-        updatedCartItems.push({
-            product: item.product,
-            quantity: item.quantity,
-            color: item.color,
-            price: product.price
-        });
     }
 
-    const newOrder = await Order.create({
-        user: req.user._id,
-        cartItems: updatedCartItems,
-        shippingAddress,
-        totalOrderPrice,
-        isPaid: false
-    });
+    totalOrderPrice += shippingPrice;
 
-    const bulkOption = cartItems.map((item) => ({
-        updateOne: {
-            filter: { _id: item.product },
-            update: { $inc: { quantity: -item.quantity, sold: +item.quantity } }
-        }
-    }));
+    // ✅ رفع صورة InstaPay لو الدفع instapay
+    let instapayImageUrl = null;
+    if (paymentMethodType === 'instapay' && req.file) {
+        const imageName = `instapay-${uuidv4()}`;
+        const buffer = await sharp(req.file.buffer)
+            .resize(800, 800, {
+                fit: sharp.fit.contain,
+                background: { r: 255, g: 255, b: 255 }
+            })
+            .toFormat('jpeg')
+            .jpeg({ quality: 90 })
+            .toBuffer();
 
-    if (bulkOption.length > 0) {
-        await Product.bulkWrite(bulkOption, {});
+        const result = await uploadToCloudinary(buffer, imageName, 'payments');
+        instapayImageUrl = result.secure_url;
     }
-
-    await newOrder.populate({
-        path: 'user',
-        select: '_id name email'
-    });
-
-    res.status(201).json({
-        status: 'success',
-        data: sanitizeOrder(newOrder)
-    });
-});
-
-// export const createDirectOrder = asyncHandler(async (req, res, next) => {
-//     const { cartItems, shippingAddress } = req.body;
-//     if (!cartItems || cartItems.length === 0) {
-//         return next(new ApiError('No products provided', 400));
-//     }
-
-//     const productIds = cartItems.map((item) => item.product);
-//     const products = await Product.find({ _id: { $in: productIds } });
-
-//     if (products.length !== cartItems.length) {
-//         return next(new ApiError('Some products do not exist', 400));
-//     }
-
-//     let totalOrderPrice = 0;
-//     let updatedCartItems = [];
-
-//     for (const item of cartItems) {
-//         const product = products.find((p) => String(p._id) === String(item.product));
-//         if (!product) {
-//             return next(new ApiError(`Product not found: ${item.product}`, 404));
-//         }
-//         if (product.quantity < item.quantity) {
-//             return next(
-//                 new ApiError(
-//                     `Insufficient stock for "${product.title}". Available: ${product.quantity}, Requested: ${item.quantity}`,
-//                     400
-//                 )
-//             );
-//         }
-
-//         totalOrderPrice += product.price * item.quantity;
-
-//         updatedCartItems.push({
-//             product: item.product,
-//             quantity: item.quantity,
-//             color: item.color,
-//             price: product.price
-//         });
-//     }
-
-//     // let shippingPrice = 0;
-//     // try {
-//     //     const shPrice = await globalShippingPrice.findOne();
-//     //     if (shPrice && shPrice.shippingPrice) {
-//     //         shippingPrice = shPrice.shippingPrice;
-//     //     }
-//     // } catch (error) {
-//     //     return next(new ApiError('Error fetching shipping price', 500));
-//     // }
-
-//     // totalOrderPrice += shippingPrice;
-
-//     const newOrder = await Order.create({
-//         user: req.user._id,
-//         cartItems: updatedCartItems,
-//         shippingAddress,
-//         totalOrderPrice,
-//         isPaid: false
-//     });
-
-//     const bulkOption = cartItems.map((item) => ({
-//         updateOne: {
-//             filter: { _id: item.product },
-//             update: { $inc: { quantity: -item.quantity, sold: +item.quantity } }
-//         }
-//     }));
-
-//     if (bulkOption.length > 0) {
-//         await Product.bulkWrite(bulkOption, {});
-//     }
-
-//     await newOrder.populate({
-//         path: 'user',
-//         select: '_id name email'
-//     });
-
-//     res.status(201).json({
-//         status: 'success',
-//         data: sanitizeOrder(newOrder)
-//     });
-// });
-
-
-const calculateTotalOrderPrice = (cart) => {
-    return cart.totalPriceAfterDiscount || cart.totalCartPrice;
-};
-
-// @desc    Create cash order
-// @route   POST /api/v1/orders/cartId
-// @access  Protected/User
-export const createCashOrder = asyncHandler(async (req, res, next) => {
-    const shPrice = await globalShippingPrice.findOne();
-    const shippingPrice = shPrice ? shPrice.shippingPrice : 0;
-    const cart = await Cart.findById(req.params.cartId);
-
-    if (!cart) {
-        return next(
-            new ApiError(`There is no such cart with id ${req.params.cart}`, 404)
-        );
-    }
-
-    const totalOrderPrice = calculateTotalOrderPrice(cart) + shippingPrice;
 
     const order = await Order.create({
         user: req.user._id,
-        cartItems: cart.cartItems,
-        shippingAddress: req.body.shippingAddress,
+        cartItems,
+        shippingAddress,
         shippingPrice,
         totalOrderPrice,
-        paymentMethodType: 'cash',
-        isPaid: false
+        paymentMethodType: paymentMethodType || 'cash',
+        isPaid: paymentMethodType === 'instapay', // بيعتبره مدفوع لو انستا باي
+        instapayScreenshot: instapayImageUrl
     });
 
     if (order) {
-        const bulkOption = cart.cartItems.map((item) => ({
+        const bulkOption = cartItems.map((item) => ({
             updateOne: {
                 filter: { _id: item.product },
                 update: { $inc: { quantity: -item.quantity, sold: +item.quantity } }
             }
         }));
-
         await Product.bulkWrite(bulkOption, {});
-
-        await Cart.findByIdAndDelete(req.params.cartId);
     }
 
     await order.populate({
@@ -217,6 +134,66 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
         data: sanitizeOrder(order)
     });
 });
+
+
+const calculateTotalOrderPrice = (cart) => {
+    return cart.totalPriceAfterDiscount || cart.totalCartPrice;
+};
+
+// @desc    Create cash order
+// @route   POST /api/v1/orders
+// @access  Protected/User
+export const createCashOrder = asyncHandler(async (req, res, next) => {
+    const cart = await Cart.findOne({ user: req.user._id }); 
+  
+    if (!cart) {
+      return next(new ApiError(`Cart not found`, 404));
+    }
+  
+    const taxPrice = 0;
+    const shippingPrice = 0;
+  
+    const cartPrice = cart.totalPriceAfterDiscount || cart.totalCartPrice;
+    const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
+  
+    const orderData = {
+      user: req.user._id,
+      cartItems: cart.cartItems,
+      shippingAddress: {
+        address: req.body.address,
+        phone: req.body.phone,
+        city: req.body.city,
+        paymentMethodType: req.body.paymentMethodType || 'cash'
+      },
+      totalOrderPrice
+    };
+  
+    if (
+      req.body.paymentMethodType === 'InstaPay' &&
+      req.file &&
+      req.file.buffer
+    ) {
+      const imageBuffer = await sharp(req.file.buffer)
+        .resize(600, 800)
+        .toFormat('jpeg')
+        .jpeg({ quality: 90 })
+        .toBuffer();
+  
+      const filename = `instapay-${uuidv4()}`;
+      const result = await uploadToCloudinary(imageBuffer, filename, 'orders');
+  
+      orderData.shippingAddress.image = result.secure_url;
+    }
+  
+    const order = await Order.create(orderData);
+  
+    // Clear cart
+    await Cart.findOneAndDelete({ user: req.user._id }); // ✅
+  
+    res.status(201).json({ status: 'success', data: order });
+  });
+  
+  
 
 export const getAllOrders = asyncHandler(async (req, res, next) => {
     const decumentsCounts = await Order.countDocuments();
@@ -234,7 +211,8 @@ export const getAllOrders = asyncHandler(async (req, res, next) => {
 
 export const getAllUserOrders = asyncHandler(async (req, res, next) => {
     const decumentsCounts = await Order.countDocuments();
-    const apiFeatures = new ApiFeatures(Order.find({ user: req.user._id }).populate('user', 'name email -_id').select('-__v'), req.query).paginate(decumentsCounts);
+    const apiFeatures = new ApiFeatures(Order.find({ user: req.user._id }).populate('user', 'name email -_id').select('-__v'), req.query).paginate(decumentsCounts)
+        .sort({ createdAt: -1 });
     const { mongooseQuery, paginationResult } = apiFeatures;
     const orders = await mongooseQuery;
 

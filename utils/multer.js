@@ -23,3 +23,13 @@ export const uploadProductImages = upload.fields([
     { name: 'imageCover', maxCount: 1 },  // One cover image
     { name: 'images', maxCount: 5 }       // Up to five additional images
 ]);
+// في ملف upload.js أو imageUploadMiddleware.js
+
+export const uploadInstapayImage = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) cb(null, true);
+      else cb(new Error('Only images are allowed'), false);
+    },
+  }).single('instapayImage'); 
+  

@@ -1,8 +1,8 @@
 import express from 'express';
-import { createCashOrder, createDirectOrder, getAllOrders, getAllUserOrders, deleteOrder, updateShippingPrice, updateGlobalShippingPrice } from '../services/orderService.js';
+import { createCashOrder, getAllOrders, getAllUserOrders, deleteOrder, updateShippingPrice, updateGlobalShippingPrice } from '../services/orderService.js';
 import { protect, allowedTo } from '../services/authService.js';
-import { createOrderValidator, deleteOrderValidator, updateShippingPriceValidator } from '../utils/validators/orderValidator.js';
-
+import { deleteOrderValidator, updateShippingPriceValidator } from '../utils/validators/orderValidator.js';
+import { uploadInstapayImage } from '../utils/multer.js';
 const router = express.Router();
 
 router.route('/')
@@ -11,9 +11,10 @@ router.route('/')
 router.route('/my-orders')
     .get(protect, allowedTo('user'), getAllUserOrders);
 
-router.route('/direct-order')
-    .post(protect, allowedTo('user', 'admin'), createOrderValidator, createDirectOrder);
-
+// router.route('/direct-order')
+//     .post(protect, allowedTo('user'), uploadToCloudinary,resizeProductImages,createOrderValidator, createDirectOrder);
+router.route('/cashOrder')
+    .post(protect, allowedTo('user'),uploadInstapayImage, createCashOrder);
 router.route('/:id')
     .delete(protect, allowedTo('user', 'admin'), deleteOrderValidator, deleteOrder);
 
