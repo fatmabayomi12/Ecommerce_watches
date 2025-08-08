@@ -157,9 +157,9 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
     const totalOrderPrice = cartPrice + taxPrice + shippingPrice;
   
     const orderData = {
-      user: req.user._id,
-      cartItems: cart.cartItems,
-      shippingAddress: {
+        user: req.user._id,
+        cartItems: cart.cartItems,
+        shippingAddress: {
         address: req.body.address,
         phone: req.body.phone,
         city: req.body.city,
