@@ -144,8 +144,9 @@ const calculateTotalOrderPrice = (cart) => {
 // @route   POST /api/v1/orders
 // @access  Protected/User
 export const createCashOrder = asyncHandler(async (req, res, next) => {
+    
     const cart = await Cart.findOne({ user: req.user._id }); 
-  
+    
     if (!cart) {
       return next(new ApiError(`Cart not found`, 404));
     }
@@ -157,7 +158,6 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
         }
       }
       
-  
     const taxPrice = 0;
     const shippingPrice = 0;
   
@@ -166,7 +166,10 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
   
     const orderData = {
         user: req.user._id,
-        cartItems: cart.cartItems,
+        cartItems: {
+         product: req.body.cartItems.map(item => item.product),
+         quantity: req.body.cartItems.map(item => item.quantity),
+        },
         shippingAddress: {
         address: req.body.address,
         phone: req.body.phone,
@@ -201,7 +204,7 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
     }
   
     // Clear cart
-    await Cart.findOneAndDelete({ user: req.user._id }); // ✅
+    await Cart.findOneAndDelete({ user: req.user._id }); 
   
     res.status(201).json({ status: 'success', data: order });
   });
