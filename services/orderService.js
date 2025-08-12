@@ -149,6 +149,14 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
     if (!cart) {
       return next(new ApiError(`Cart not found`, 404));
     }
+
+    for (const item of cart.cartItems) {
+        const product = await Product.findById(item.product);
+        if (!product || product.quantity < item.quantity) {
+          return next(new ApiError(`الكمية المطلوبة غير متوفرة لمنتج ${product?.name}`, 400));
+        }
+      }
+      
   
     const taxPrice = 0;
     const shippingPrice = 0;
@@ -186,6 +194,11 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
     }
   
     const order = await Order.create(orderData);
+    for (const item of cart.cartItems) {
+        await Product.findByIdAndUpdate(item.product, {
+        $inc: { quantity: -item.quantity, sold: +item.quantity }
+        });
+    }
   
     // Clear cart
     await Cart.findOneAndDelete({ user: req.user._id }); // ✅
