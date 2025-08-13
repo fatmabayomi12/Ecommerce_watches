@@ -166,10 +166,7 @@ export const createCashOrder = asyncHandler(async (req, res, next) => {
   
     const orderData = {
         user: req.user._id,
-        cartItems: {
-         product: req.body.cartItems.map(item => item.product),
-         quantity: req.body.cartItems.map(item => item.quantity),
-        },
+        cartItems: cart.cartItems,
         shippingAddress: {
         address: req.body.address,
         phone: req.body.phone,
